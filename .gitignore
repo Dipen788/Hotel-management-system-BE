@@ -1,5 +1,16 @@
+# Dependencies (root + any subproject)
 node_modules
+**/node_modules
+
+# Secrets — keep only *.env.example tracked
 .env
+**/.env
+!**/.env.example
+
+# Build output
+frontend/build
+**/build
+**/dist
 
 # Hardhat files
 /cache
@@ -12,6 +23,22 @@ node_modules
 # solidity-coverage files
 /coverage
 /coverage.json
+**/coverage
 
 # Hardhat Ignition default folder for deployments against a local node
 ignition/deployments/chain-31337
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log
+yarn-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.idea
+.vscode
+*.swp
