@@ -5,7 +5,7 @@ const path = require("path");
 async function main() {
   console.log("🏨 Deploying HotelBooking Smart Contract...\n");
 
-  const [deployer] = await hre.ethers.getSigners();
+  const [deployer, guest1, guest2] = await hre.ethers.getSigners();
   console.log("Deploying with account:", deployer.address);
 
   const balance = await hre.ethers.provider.getBalance(deployer.address);
@@ -67,10 +67,54 @@ async function main() {
     console.log(`   ✅ Created room: ${room.name}`);
   }
 
+  // ── Seed sample booking + review to demonstrate features ──
+  console.log("\n📝 Seeding sample booking & review...");
+
+  const now = Math.floor(Date.now() / 1000);
+  const checkIn = now + 86400;
+  const checkOut = now + 86400 * 3;
+  const totalCost = hre.ethers.parseEther("0.02"); // 2 nights × 0.01
+
+  // Guest1 books room 1
+  const bookTx = await hotelBooking
+    .connect(guest1)
+    .bookRoom(1, checkIn, checkOut, { value: totalCost });
+  await bookTx.wait();
+  console.log("   ✅ Guest1 booked Room 1 (2 nights)");
+
+  // Owner checks in and checks out guest1
+  await (await hotelBooking.checkIn(1)).wait();
+  console.log("   ✅ Guest1 checked in");
+  await (await hotelBooking.checkOut(1)).wait();
+  console.log("   ✅ Guest1 checked out");
+
+  // Guest1 leaves a review
+  await (
+    await hotelBooking
+      .connect(guest1)
+      .submitReview(1, 5, "Amazing ocean view! Room was spotless and the staff were incredibly helpful. Will definitely come back!")
+  ).wait();
+  console.log("   ✅ Guest1 left a 5-star review");
+
+  // Guest2 books room 2 (stays active for demo)
+  const bookTx2 = await hotelBooking
+    .connect(guest2)
+    .bookRoom(2, checkIn, checkOut, { value: hre.ethers.parseEther("0.05") });
+  await bookTx2.wait();
+  console.log("   ✅ Guest2 booked Room 2 (active booking)");
+
+  // ── Print stats ──
   const stats = await hotelBooking.getStats();
   console.log(`\n📊 Deployment Stats:`);
   console.log(`   Total Rooms: ${stats.totalRooms}`);
   console.log(`   Available Rooms: ${stats.availableRooms}`);
+  console.log(`   Booked Rooms: ${stats.bookedRooms}`);
+  console.log(`   Total Bookings: ${stats.totalBookings}`);
+  console.log(`   Revenue: ${hre.ethers.formatEther(stats.revenue)} ETH`);
+  console.log(`   Total Reviews: ${stats.totalReviewsCount}`);
+
+  const loyalty1 = await hotelBooking.getLoyaltyInfo(guest1.address);
+  console.log(`\n🎖️  Guest1 Loyalty: ${loyalty1.points} points`);
 
   // ── Export contract data for frontend ──
   const artifactPath = path.join(
