@@ -62,7 +62,7 @@ export async function getAllRooms() {
 export async function createRoom(name, category, priceInEth, imageHash) {
   const contract = await getContract(true);
   const priceInWei = ethers.parseEther(priceInEth.toString());
-  const tx = await contract.createRoom(name, category, priceInWei, imageHash);
+  const tx = await contract.createRoom(name, category, priceInWei, imageHash || "");
   await tx.wait();
   return tx;
 }
@@ -99,6 +99,20 @@ export async function cancelBooking(bookingId) {
   return tx;
 }
 
+/**
+ * Returns the graduated refund the guest would receive if they cancelled right now.
+ * Mirrors `getRefundAmount(uint256)` on HotelBooking.sol.
+ * @returns { refundEth: string, percent: number }
+ */
+export async function getRefundQuote(bookingId) {
+  const contract = await getContract();
+  const [refundWei, percent] = await contract.getRefundAmount(bookingId);
+  return {
+    refundEth: ethers.formatEther(refundWei),
+    percent: Number(percent),
+  };
+}
+
 export async function checkInGuest(bookingId) {
   const contract = await getContract(true);
   const tx = await contract.checkIn(bookingId);
@@ -133,11 +147,13 @@ export async function getStats() {
   const contract = await getContract();
   const stats = await contract.getStats();
   return {
-    totalRooms: Number(stats.totalRooms),
-    availableRooms: Number(stats.availableRooms),
-    bookedRooms: Number(stats.bookedRooms),
-    totalBookings: Number(stats.totalBookings),
-    revenue: ethers.formatEther(stats.revenue),
+    totalRooms: Number(stats[0]),
+    availableRooms: Number(stats[1]),
+    bookedRooms: Number(stats[2]),
+    totalBookings: Number(stats[3]),
+    revenue: ethers.formatEther(stats[4]),
+    totalReviews: Number(stats[5] || 0),
+    averageRating: Number(stats[6] || 0),
   };
 }
 
@@ -151,6 +167,51 @@ export async function withdrawFunds() {
   const tx = await contract.withdrawFunds();
   await tx.wait();
   return tx;
+}
+
+// ── Review Functions ──
+
+export async function submitReview(bookingId, rating, comment) {
+  const contract = await getContract(true);
+  const tx = await contract.submitReview(bookingId, rating, comment);
+  await tx.wait();
+  return tx;
+}
+
+export async function getRoomReviews(roomId) {
+  const contract = await getContract();
+  const reviews = await contract.getRoomReviews(roomId);
+  return reviews.map(parseReview);
+}
+
+export async function getRoomAverageRating(roomId) {
+  const contract = await getContract();
+  const result = await contract.getRoomAverageRating(roomId);
+  return {
+    avgRating: Number(result[0]),
+    totalReviews: Number(result[1]),
+  };
+}
+
+// ── Loyalty Functions ──
+
+export async function getLoyaltyInfo(address) {
+  const contract = await getContract();
+  const info = await contract.getLoyaltyInfo(address);
+  return {
+    points: Number(info[0]),
+    totalBookings: Number(info[1]),
+    hasDiscount: info[2],
+  };
+}
+
+export async function getDiscountedPrice(roomId, nights, guestAddress) {
+  const contract = await getContract();
+  const result = await contract.getDiscountedPrice(roomId, nights, guestAddress);
+  return {
+    finalPrice: ethers.formatEther(result[0]),
+    discount: ethers.formatEther(result[1]),
+  };
 }
 
 // ── Parsers ──
@@ -183,6 +244,18 @@ function parseBooking(booking) {
   };
 }
 
+function parseReview(review) {
+  return {
+    id: Number(review.id),
+    bookingId: Number(review.bookingId),
+    roomId: Number(review.roomId),
+    guest: review.guest,
+    rating: Number(review.rating),
+    comment: review.comment,
+    createdAt: Number(review.createdAt),
+  };
+}
+
 // ── Helpers ──
 
 export function formatDate(timestamp) {
@@ -199,7 +272,7 @@ export function shortenAddress(addr) {
 }
 
 export function calculateNights(checkIn, checkOut) {
-  return Math.ceil((checkOut - checkIn) / 86400);
+  return Math.max(1, Math.ceil((checkOut - checkIn) / 86400));
 }
 
 export function calculateTotalCost(pricePerNight, nights) {
