@@ -42,3 +42,15 @@ Thumbs.db
 .idea
 .vscode
 *.swp
+
+# Coursework / recording artefacts — keep out of the public repo
+demo.md
+demo/
+presentation.*
+*.pptx
+*.ppt
+*.key
+*.mp4
+*.mov
+*.mkv
+recording*/
